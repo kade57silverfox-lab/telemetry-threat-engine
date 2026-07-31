@@ -1,0 +1,23 @@
+services:
+  engine:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Override this in any real deployment -- never rely on the binary's
+      # own dev-token fallback outside a local sandbox.
+      API_TOKEN: ${API_TOKEN:-dev-token-change-me}
+      RUST_LOG: info
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ../dashboard:/usr/share/nginx/html:ro
+    depends_on:
+      - engine
+    restart: unless-stopped

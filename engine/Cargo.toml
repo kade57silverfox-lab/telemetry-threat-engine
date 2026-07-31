@@ -1,0 +1,40 @@
+[package]
+name = "threat-engine"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "threat-engine"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime + web framework (the "developer" / API layer)
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Lock-free / concurrent primitives (the "software engineer" layer)
+crossbeam = "0.8"
+crossbeam-channel = "0.5"
+
+# Signature matching (Aho-Corasick multi-pattern automaton)
+aho-corasick = "1.1"
+
+# Serialization for API + logs
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Structured logging (the "IT support / operability" layer)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Hashing for sketches / flow hashing
+rustc-hash = "1.1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Randomness for the packet-event simulator (stands in for real capture)
+rand = "0.8"
+
+[dev-dependencies]

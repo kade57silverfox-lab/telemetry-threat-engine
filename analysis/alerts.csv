@@ -1,0 +1,11 @@
+id,timestamp_ms,rule_name,severity,src_ip,dst_ip,detail,detector
+1,1785439213219,syn-flood-anomaly,Critical,10.0.0.36,192.168.1.1,source 10.0.0.36 sent an estimated 50+ SYNs within 5s window,Anomaly
+2,1785439217999,path-traversal-passwd,High,152.213.255.50,192.168.1.1,signature match for rule 'path-traversal-passwd' in payload sample,Signature
+1,1785439217999,path-traversal-generic,Medium,152.213.255.50,192.168.1.1,signature match for rule 'path-traversal-generic' in payload sample,Signature
+1,1785439223373,syn-flood-anomaly,Critical,10.0.0.235,192.168.1.1,source 10.0.0.235 sent an estimated 50+ SYNs within 5s window,Anomaly
+4,1785439232785,path-traversal-passwd,High,69.63.115.177,192.168.1.1,signature match for rule 'path-traversal-passwd' in payload sample,Signature
+3,1785439232785,path-traversal-generic,Medium,69.63.115.177,192.168.1.1,signature match for rule 'path-traversal-generic' in payload sample,Signature
+1,1785439233469,syn-flood-anomaly,Critical,10.0.0.170,192.168.1.1,source 10.0.0.170 sent an estimated 50+ SYNs within 5s window,Anomaly
+2,1785439243565,syn-flood-anomaly,Critical,10.0.0.38,192.168.1.1,source 10.0.0.38 sent an estimated 50+ SYNs within 5s window,Anomaly
+6,1785439247577,path-traversal-passwd,High,166.94.251.208,192.168.1.1,signature match for rule 'path-traversal-passwd' in payload sample,Signature
+5,1785439247577,path-traversal-generic,Medium,166.94.251.208,192.168.1.1,signature match for rule 'path-traversal-generic' in payload sample,Signature
