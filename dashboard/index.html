@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Threat Engine — Triage Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #121722;
+    --panel-2: #171d2b;
+    --line: #232b3a;
+    --text: #dbe2ee;
+    --muted: #6b7686;
+    --accent: #37e8c6;
+    --crit: #ff4d5e;
+    --high: #ff9f43;
+    --med: #f4d35e;
+    --low: #5ea8ff;
+    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px;
+  }
+  ::selection { background: var(--accent); color: #05100e; }
+
+  /* ---------- Login gate ---------- */
+  #login-screen {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, #10151f 0%, #0a0d12 70%);
+    z-index: 50;
+  }
+  #login-card {
+    width: 360px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 28px;
+  }
+  #login-card h1 { font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+  #login-card p { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; line-height: 1.5; }
+  #login-card input {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+    padding: 10px 12px; border-radius: 6px; font-family: var(--mono); font-size: 13px; margin-bottom: 10px;
+  }
+  #login-card input:focus { outline: none; border-color: var(--accent); }
+  #login-card button {
+    width: 100%; background: var(--accent); color: #06120f; border: none; font-weight: 600;
+    padding: 10px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  #login-card button:hover { filter: brightness(1.08); }
+  #login-error { color: var(--crit); font-size: 12px; height: 16px; margin-top: 8px; }
+
+  /* ---------- Shell ---------- */
+  #app { display: none; height: 100%; grid-template-rows: 52px 1fr; grid-template-columns: 240px 1fr; }
+  #app.active { display: grid; }
+
+  header {
+    grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; }
+  header .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  header .brand span { font-family: var(--mono); font-size: 13px; letter-spacing: 0.03em; color: var(--muted); }
+  header .stats-strip { display: flex; gap: 22px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  header .stats-strip b { color: var(--text); font-weight: 600; }
+
+  nav {
+    border-right: 1px solid var(--line); padding: 16px 10px; background: var(--panel);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  nav .section-label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 12px 8px 4px; }
+  nav button.filter {
+    text-align: left; background: transparent; border: none; color: var(--muted);
+    padding: 7px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex;
+    justify-content: space-between; align-items: center;
+  }
+  nav button.filter:hover { background: var(--panel-2); color: var(--text); }
+  nav button.filter.active { background: var(--panel-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+  nav button.filter .count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  nav .sev-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 8px; }
+
+  main { display: grid; grid-template-rows: 150px 1fr; overflow: hidden; }
+
+  #timeline-wrap { border-bottom: 1px solid var(--line); padding: 10px 14px; }
+  #timeline-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  #timeline-header h2 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+  #timeline-header .hint { font-size: 11px; color: var(--muted); }
+  #timeline { width: 100%; height: 108px; display: block; }
+
+  #list-wrap { overflow-y: auto; padding: 4px 14px 14px; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  thead th {
+    position: sticky; top: 0; background: var(--bg); text-align: left; color: var(--muted);
+    font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--panel-2); }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid #171c26; white-space: nowrap; }
+  .sev-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10.5px;
+    font-weight: 700; letter-spacing: 0.03em;
+  }
+  .sev-Critical { background: rgba(255,77,94,0.15); color: var(--crit); }
+  .sev-High { background: rgba(255,159,67,0.15); color: var(--high); }
+  .sev-Medium { background: rgba(244,211,94,0.15); color: var(--med); }
+  .sev-Low { background: rgba(94,168,255,0.15); color: var(--low); }
+  .detector-tag { color: var(--muted); }
+  .empty-state { text-align: center; color: var(--muted); padding: 60px 0; font-size: 13px; }
+
+  #detail-drawer {
+    position: fixed; top: 52px; right: 0; bottom: 0; width: 380px; background: var(--panel);
+    border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 0.18s ease;
+    padding: 20px; z-index: 20;
+  }
+  #detail-drawer.open { transform: translateX(0); }
+  #detail-drawer h3 { margin: 0 0 4px; font-size: 15px; }
+  #detail-drawer .close-btn { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; }
+  #detail-drawer dl { font-family: var(--mono); font-size: 12.5px; margin-top: 18px; }
+  #detail-drawer dt { color: var(--muted); margin-top: 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #detail-drawer dd { margin: 3px 0 0; color: var(--text); }
+</style>
+</head>
+<body>
+
+  <!-- Login gate: the "full-stack auth on the admin panel" requirement.
+       Token is kept in memory only for this tab session -- see README for
+       why (no persistence beyond the session, by design, for a demo token). -->
+  <div id="login-screen">
+    <div id="login-card">
+      <h1>Threat Engine</h1>
+      <p>Enter the API bearer token printed in the engine's startup log
+         (<code>API_TOKEN</code> env var, or the dev default if unset).</p>
+      <input id="api-base" placeholder="API base URL" value="http://localhost:8080" />
+      <input id="token-input" placeholder="Bearer token" type="password" />
+      <button id="login-btn">Connect</button>
+      <div id="login-error"></div>
+    </div>
+  </div>
+
+  <div id="app">
+    <header>
+      <div class="brand"><span class="dot"></span><span>THREAT-ENGINE / TRIAGE CONSOLE</span></div>
+      <div class="stats-strip" id="stats-strip">
+        <div>events/sec <b id="stat-eps">—</b></div>
+        <div>processed <b id="stat-processed">—</b></div>
+        <div>dropped <b id="stat-dropped">—</b></div>
+        <div>alerts <b id="stat-alerts">—</b></div>
+      </div>
+    </header>
+
+    <nav>
+      <div class="section-label">Severity</div>
+      <button class="filter active" data-sev="all">All alerts <span class="count" id="count-all">0</span></button>
+      <button class="filter" data-sev="Critical"><span class="sev-swatch" style="background:var(--crit)"></span>Critical <span class="count" id="count-Critical">0</span></button>
+      <button class="filter" data-sev="High"><span class="sev-swatch" style="background:var(--high)"></span>High <span class="count" id="count-High">0</span></button>
+      <button class="filter" data-sev="Medium"><span class="sev-swatch" style="background:var(--med)"></span>Medium <span class="count" id="count-Medium">0</span></button>
+      <button class="filter" data-sev="Low"><span class="sev-swatch" style="background:var(--low)"></span>Low <span class="count" id="count-Low">0</span></button>
+
+      <div class="section-label">Detector</div>
+      <button class="filter det active" data-det="all">All detectors</button>
+      <button class="filter det" data-det="Signature">Signature</button>
+      <button class="filter det" data-det="Anomaly">Anomaly</button>
+      <button class="filter det" data-det="Cep">CEP</button>
+    </nav>
+
+    <main>
+      <div id="timeline-wrap">
+        <div id="timeline-header">
+          <h2>Alert timeline — last ~10 min</h2>
+          <span class="hint">canvas-rendered, one mark per alert, color = severity</span>
+        </div>
+        <canvas id="timeline"></canvas>
+      </div>
+      <div id="list-wrap">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Severity</th><th>Rule</th><th>Detector</th><th>Source</th><th>Target</th></tr>
+          </thead>
+          <tbody id="alert-rows"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state" style="display:none">No alerts match the current filter.</div>
+      </div>
+    </main>
+  </div>
+
+  <div id="detail-drawer">
+    <button class="close-btn" id="drawer-close">✕</button>
+    <h3 id="d-rule">—</h3>
+    <span class="sev-pill" id="d-sev">—</span>
+    <dl>
+      <dt>Detector</dt><dd id="d-detector">—</dd>
+      <dt>Time</dt><dd id="d-time">—</dd>
+      <dt>Source IP</dt><dd id="d-src">—</dd>
+      <dt>Destination IP</dt><dd id="d-dst">—</dd>
+      <dt>Detail</dt><dd id="d-detail">—</dd>
+      <dt>Alert ID</dt><dd id="d-id">—</dd>
+    </dl>
+  </div>
+
+<script>
+(function () {
+  let API_BASE = "http://localhost:8080";
+  let TOKEN = null;
+  let alerts = [];
+  let sevFilter = "all";
+  let detFilter = "all";
+  let lastProcessed = null;
+  let lastTime = null;
+
+  const SEV_COLOR = { Critical: "#ff4d5e", High: "#ff9f43", Medium: "#f4d35e", Low: "#5ea8ff" };
+
+  async function api(path, opts) {
+    const res = await fetch(API_BASE + path, Object.assign({
+      headers: TOKEN ? { "Authorization": "Bearer " + TOKEN } : {}
+    }, opts || {}));
+    if (!res.ok) throw new Error(path + " -> " + res.status);
+    return res.json();
+  }
+
+  document.getElementById("login-btn").addEventListener("click", async () => {
+    API_BASE = document.getElementById("api-base").value.trim().replace(/\/$/, "");
+    const token = document.getElementById("token-input").value;
+    const errEl = document.getElementById("login-error");
+    errEl.textContent = "";
+    try {
+      const res = await fetch(API_BASE + "/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) {
+        errEl.textContent = "Invalid token.";
+        return;
+      }
+      TOKEN = token;
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("app").classList.add("active");
+      startPolling();
+    } catch (e) {
+      errEl.textContent = "Could not reach " + API_BASE + " — is the engine running?";
+    }
+  });
+
+  document.querySelectorAll(".filter[data-sev]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter[data-sev]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      sevFilter = btn.dataset.sev;
+      render();
+    });
+  });
+  document.querySelectorAll(".filter[data-det]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter[data-det]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      detFilter = btn.dataset.det;
+      render();
+    });
+  });
+  document.getElementById("drawer-close").addEventListener("click", () => {
+    document.getElementById("detail-drawer").classList.remove("open");
+  });
+
+  function openDrawer(a) {
+    document.getElementById("d-rule").textContent = a.rule_name;
+    const sevEl = document.getElementById("d-sev");
+    sevEl.textContent = a.severity;
+    sevEl.className = "sev-pill sev-" + a.severity;
+    document.getElementById("d-detector").textContent = a.detector;
+    document.getElementById("d-time").textContent = new Date(a.timestamp_ms).toLocaleString();
+    document.getElementById("d-src").textContent = a.src_ip;
+    document.getElementById("d-dst").textContent = a.dst_ip;
+    document.getElementById("d-detail").textContent = a.detail;
+    document.getElementById("d-id").textContent = a.id;
+    document.getElementById("detail-drawer").classList.add("open");
+  }
+
+  function filtered() {
+    return alerts.filter(a =>
+      (sevFilter === "all" || a.severity === sevFilter) &&
+      (detFilter === "all" || a.detector === detFilter)
+    );
+  }
+
+  function render() {
+    const rows = filtered();
+    const tbody = document.getElementById("alert-rows");
+    tbody.innerHTML = "";
+    document.getElementById("empty-state").style.display = rows.length ? "none" : "block";
+    for (const a of rows.slice(0, 500)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + new Date(a.timestamp_ms).toLocaleTimeString() + "</td>" +
+        "<td><span class='sev-pill sev-" + a.severity + "'>" + a.severity + "</span></td>" +
+        "<td>" + a.rule_name + "</td>" +
+        "<td class='detector-tag'>" + a.detector + "</td>" +
+        "<td>" + a.src_ip + "</td>" +
+        "<td>" + a.dst_ip + "</td>";
+      tr.addEventListener("click", () => openDrawer(a));
+      tbody.appendChild(tr);
+    }
+
+    const counts = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    alerts.forEach(a => counts[a.severity] = (counts[a.severity] || 0) + 1);
+    document.getElementById("count-all").textContent = alerts.length;
+    Object.keys(counts).forEach(k => {
+      const el = document.getElementById("count-" + k);
+      if (el) el.textContent = counts[k];
+    });
+
+    drawTimeline();
+  }
+
+  // Canvas timeline: draws directly to pixels rather than one DOM node per
+  // alert, so this stays fast even with thousands of alerts in view --
+  // the same reasoning that motivated uPlot/WebGL in the design doc,
+  // scaled down to a dependency-free canvas implementation here.
+  function drawTimeline() {
+    const canvas = document.getElementById("timeline");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 108 * dpr;
+    canvas.style.width = rect.width + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const w = rect.width, h = 108;
+    ctx.clearRect(0, 0, w, h);
+
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000;
+    const visible = alerts.filter(a => now - a.timestamp_ms <= windowMs);
+
+    // faint gridlines every minute
+    ctx.strokeStyle = "#1a2130";
+    ctx.lineWidth = 1;
+    for (let m = 0; m <= 10; m++) {
+      const x = w - (m / 10) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    const lanes = { Critical: 14, High: 40, Medium: 66, Low: 92 };
+    for (const a of visible) {
+      const age = now - a.timestamp_ms;
+      const x = w - (age / windowMs) * w;
+      const y = lanes[a.severity] || 92;
+      ctx.fillStyle = SEV_COLOR[a.severity] || "#7c8798";
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#6b7686";
+    ctx.font = "10px monospace";
+    ["Critical", "High", "Medium", "Low"].forEach(s => {
+      ctx.fillText(s, 4, lanes[s] - 8);
+    });
+  }
+
+  async function poll() {
+    try {
+      const [stats, latest] = await Promise.all([api("/stats"), api("/alerts?limit=1000")]);
+      if (lastProcessed !== null && lastTime !== null) {
+        const dEvents = stats.events_processed - lastProcessed;
+        const dTime = (Date.now() - lastTime) / 1000;
+        document.getElementById("stat-eps").textContent = dTime > 0 ? Math.round(dEvents / dTime) : "—";
+      }
+      lastProcessed = stats.events_processed;
+      lastTime = Date.now();
+      document.getElementById("stat-processed").textContent = stats.events_processed.toLocaleString();
+      document.getElementById("stat-dropped").textContent = stats.events_dropped.toLocaleString();
+      document.getElementById("stat-alerts").textContent = stats.alerts_fired.toLocaleString();
+
+      alerts = latest;
+      render();
+    } catch (e) {
+      console.error("poll failed", e);
+    }
+  }
+
+  function startPolling() {
+    poll();
+    setInterval(poll, 2000);
+    window.addEventListener("resize", drawTimeline);
+  }
+})();
+</script>
+</body>
+</html>
