@@ -1,19 +1,17 @@
-//! Wires the stages together: ingestion -> per-worker lock-free queues ->
+﻿//! Wires the stages together: ingestion -> per-worker lock-free queues ->
 //! N detection workers -> shared alert store. This module is the concrete
-//! answer to "how does backpressure work": a producer's `push` can fail if
+//! answer to "how does backpressure work": a producer''s `push` can fail if
 //! a worker falls behind, and the policy for that (drop vs. block vs.
 //! spill) is decided explicitly right here, not left implicit.
 //!
 //! Sharding: each worker owns its own queue and its own stateful detector
 //! instances (`WindowedAnomalyDetector`, `CepEngine`). The producer routes
-//! every event by `NetworkEvent::flow_key()` hashed down to a worker index,
-//! so a given source IP's traffic always lands on the same worker -- this
-//! is what makes the anomaly/CEP detectors' per-source counters accurate
-//! under concurrency, instead of being split across workers and each
-//! seeing only a fraction of one source's traffic (the earlier version of
-//! this module had exactly that bug: one shared queue any worker could pop
-//! from, so a SYN flood from one IP could be undercounted by being spread
-//! across multiple workers' independent sketches).
+//! every event by `NetworkEvent::shard_key()` (source IP only -- see that
+//! method''s docs for why NOT the full 5-tuple) hashed down to a worker
+//! index, so a given source IP''s traffic always lands on the same worker
+//! -- this is what makes the anomaly/CEP detectors'' per-source counters
+//! accurate under concurrency, instead of being split across workers and
+//! each seeing only a fraction of one source''s traffic.
 
 use crate::detection::{anomaly::WindowedAnomalyDetector, cep::CepEngine, signature::SignatureDetector};
 use crate::ingestion::Simulator;
@@ -82,7 +80,7 @@ pub fn spawn_producer(state: Arc<AppState>) {
         let worker_count = state.queues.len();
         loop {
             for event in sim.next_batch() {
-                let shard = (event.flow_key() as usize) % worker_count;
+                let shard = (event.shard_key() as usize) % worker_count;
                 match state.queues[shard].push(event) {
                     Ok(()) => {}
                     Err(_dropped) => {
@@ -102,9 +100,9 @@ pub fn spawn_producer(state: Arc<AppState>) {
 /// Spawns one detection worker thread per queue in `state.queues`. Each
 /// worker owns its own `WindowedAnomalyDetector` and `CepEngine` instance,
 /// which is now correct rather than approximate: because the producer
-/// routes by flow_key, every event for a given source IP is guaranteed to
-/// reach this same worker's queue, so its per-source sketches and partial
-/// CEP matches see that source's complete traffic.
+/// routes by shard_key (source IP), every event for a given source IP is
+/// guaranteed to reach this same worker''s queue, so its per-source
+/// sketches and partial CEP matches see that source''s complete traffic.
 pub fn spawn_workers(state: Arc<AppState>) {
     for worker_idx in 0..state.queues.len() {
         let state = Arc::clone(&state);
