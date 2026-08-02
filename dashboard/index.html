@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -52,7 +52,7 @@
   #login-error { color: var(--crit); font-size: 12px; height: 16px; margin-top: 8px; }
 
   /* ---------- Shell ---------- */
-  #app { display: none; height: 100%; grid-template-rows: 52px 1fr; grid-template-columns: 240px 1fr; }
+  #app { display: none; height: 100%; width: 100%; max-width: 100vw; grid-template-rows: 52px 1fr; grid-template-columns: 240px 1fr; overflow: hidden; }
   #app.active { display: grid; }
 
   header {
@@ -88,8 +88,8 @@
   #timeline-header .hint { font-size: 11px; color: var(--muted); }
   #timeline { width: 100%; height: 108px; display: block; }
 
-  #list-wrap { overflow-y: auto; padding: 4px 14px 14px; }
-  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  #list-wrap { overflow-y: auto; overflow-x: auto; padding: 4px 14px 14px; }
+  table { width: 100%; min-width: 700px; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
   thead th {
     position: sticky; top: 0; background: var(--bg); text-align: left; color: var(--muted);
     font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 11px;
@@ -130,7 +130,7 @@
   <div id="login-screen">
     <div id="login-card">
       <h1>Threat Engine</h1>
-      <p>Enter the API bearer token printed in the engine's startup log
+      <p>Enter the API bearer token printed in the engine''s startup log
          (<code>API_TOKEN</code> env var, or the dev default if unset).</p>
       <input id="api-base" placeholder="API base URL" value="http://localhost:8080" />
       <input id="token-input" placeholder="Bearer token" type="password" />
@@ -294,9 +294,9 @@
       const tr = document.createElement("tr");
       tr.innerHTML =
         "<td>" + new Date(a.timestamp_ms).toLocaleTimeString() + "</td>" +
-        "<td><span class='sev-pill sev-" + a.severity + "'>" + a.severity + "</span></td>" +
+        "<td><span class=''sev-pill sev-" + a.severity + "''>" + a.severity + "</span></td>" +
         "<td>" + a.rule_name + "</td>" +
-        "<td class='detector-tag'>" + a.detector + "</td>" +
+        "<td class=''detector-tag''>" + a.detector + "</td>" +
         "<td>" + a.src_ip + "</td>" +
         "<td>" + a.dst_ip + "</td>";
       tr.addEventListener("click", () => openDrawer(a));
@@ -314,10 +314,6 @@
     drawTimeline();
   }
 
-  // Canvas timeline: draws directly to pixels rather than one DOM node per
-  // alert, so this stays fast even with thousands of alerts in view --
-  // the same reasoning that motivated uPlot/WebGL in the design doc,
-  // scaled down to a dependency-free canvas implementation here.
   function drawTimeline() {
     const canvas = document.getElementById("timeline");
     const dpr = window.devicePixelRatio || 1;
@@ -334,7 +330,6 @@
     const windowMs = 10 * 60 * 1000;
     const visible = alerts.filter(a => now - a.timestamp_ms <= windowMs);
 
-    // faint gridlines every minute
     ctx.strokeStyle = "#1a2130";
     ctx.lineWidth = 1;
     for (let m = 0; m <= 10; m++) {
