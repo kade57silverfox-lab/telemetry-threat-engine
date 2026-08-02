@@ -1,4 +1,4 @@
-//! Ingestion layer.
+﻿//! Ingestion layer.
 //!
 //! In production this stage is an AF_XDP socket reading zero-copy frames
 //! out of a UMEM ring that an eBPF/XDP program has already filtered
@@ -72,6 +72,43 @@ impl Simulator {
             let mut evt = self.benign_event();
             evt.payload_sample = b"GET /../../etc/passwd HTTP/1.1".to_vec();
             events.push(evt);
+        }
+
+        // Inject a genuine probe-then-exploit sequence from ONE shared
+        // source IP, so the CEP rule (SYN-only, then a signature payload,
+        // from the same source, within 5s) is actually demonstrable.
+        //
+        // This was a real gap found during testing: the SYN-flood
+        // injection above draws its attacker IP from a narrow 10.0.0.x
+        // range, while the signature-payload injection draws from the
+        // benign_event() helper''s full random u32 IP space -- so those two
+        // event types could never share a source IP by construction. CEP
+        // wasn''t "rarely" firing, it was structurally unable to fire at
+        // all against this simulator''s traffic. This block fixes that by
+        // explicitly modeling the two-step attack the rule is designed to
+        // catch, using one shared IP for both steps.
+        if self.tick % 900 == 0 {
+            let prober_ip = self.rng.gen_range(0..255) as u32 | 0x0A00_0000;
+            events.push(NetworkEvent {
+                timestamp_ms: now_ms(),
+                src_ip: prober_ip,
+                dst_ip: 0xC0A8_0101,
+                src_port: self.rng.gen_range(1024..65535),
+                dst_port: 80,
+                protocol: Protocol::Tcp,
+                flags: 0b0001, // SYN only -- the "probe" step
+                payload_sample: vec![],
+            });
+            events.push(NetworkEvent {
+                timestamp_ms: now_ms(),
+                src_ip: prober_ip, // SAME source as the probe above
+                dst_ip: 0xC0A8_0101,
+                src_port: self.rng.gen_range(1024..65535),
+                dst_port: 80,
+                protocol: Protocol::Tcp,
+                flags: 0b0011,
+                payload_sample: b"GET /../../etc/passwd HTTP/1.1".to_vec(), // the "exploit" step
+            });
         }
 
         // Inject a port-scan pattern: one source hitting many destination
