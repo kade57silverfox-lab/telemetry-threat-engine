@@ -133,6 +133,40 @@
   #detail-drawer dd { margin: 3px 0 0; color: var(--text); }
 </style>
 </head>
+<style>
+  #app, main, header, #timeline-wrap, #list-wrap, table {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  #timeline-wrap, #list-wrap {
+    width: 100% !important;
+  }
+  table { table-layout: fixed !important; width: 100% !important; }
+  #timeline { max-width: 100% !important; }
+</style>
+<script>
+  // Hard override: stop any compounding resize logic from growing widths forever
+  (function () {
+    function clampWidths() {
+      const timelineWrap = document.getElementById("timeline-wrap");
+      const listWrap = document.getElementById("list-wrap");
+      const canvas = document.getElementById("timeline");
+      const table = document.querySelector("table");
+
+      if (timelineWrap) timelineWrap.style.width = "100%";
+      if (listWrap) listWrap.style.width = "100%";
+      if (table) table.style.width = "100%";
+      if (canvas && timelineWrap) {
+        // Force canvas to match its actual visible container, not a stale/inflated measurement
+        const w = timelineWrap.clientWidth;
+        if (canvas.width !== w) canvas.width = w;
+      }
+    }
+    // Run once now, and on every resize — but only measuring, never adding to previous width
+    clampWidths();
+    window.addEventListener("resize", clampWidths);
+  })();
+</script>
 <body>
 
   <div id="login-screen">
